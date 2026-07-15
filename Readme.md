@@ -1,204 +1,96 @@
-# AI-DocGen 📸 - Automated Process Documentation Tool
+# Scrib 🍌 — The Banana-Powered Process Documentation Tool
 
+![Scrib Logo](images/logo.png)
 
-![AI-DocGen Logo](images/logo.png)
+Scrib is a high-speed, AI-powered documentation generator that translates screen recordings and video workflows into elegant, step-by-step technical "How-To" guides. Armed with robust UI-change detection and an LLM-assisted analysis pipeline, Scrib peels away the tedious work of writing guides manually.
 
+---
 
+## 🌟 Key Features
 
-AI-DocGen is a powerful Python-based tool that automatically generates professional documentation from screen recordings. It uses AI to detect steps, analyze screenshots, and create detailed documentation in multiple formats.
+- **🍌 Smart Step Detection**: Analyzes screen recordings using color histograms and pixel MSE to pinpoint exact UI state transitions and click steps automatically.
+- **⚡ AI-Powered Action Summaries**: Interrogates each transition frame using advanced Vision APIs (e.g. Groq Llama-4 Scout Vision, Ollama, etc.) to describe user actions in natural, bold-highlighted technical English.
+- **📁 Drag & Drop Upload + Live Recording**: Supports dragging and dropping existing MP4/WebM videos or launching the in-browser Screen Recorder directly.
+- **📝 Interactive Guide Tab**: Rendered with customized, responsive Markdown that embeds the exact matching screenshots inline.
+- **📸 Detected Steps (Visual Timeline)**: Review extracted screenshot snapshots individually.
+- **🐳 Docker Native**: Ready-to-go environment including FFmpeg static compilation for immediate workflow execution.
 
-## 🌟 Features
+---
 
-- **Automated Screen Recording**: Capture your process with high-quality screen recording
-- **Smart Step Detection**: Automatically identifies distinct steps in your workflow
-- **AI-Powered Descriptions**: Generates detailed descriptions for each step using Google's Gemini Vision API
-- **Multiple Output Formats**: Generate documentation in PDF, HTML, or Markdown
-- **Interactive UI**: User-friendly Streamlit interface for easy recording and configuration
-- **Customizable Sensitivity**: Adjust step detection parameters to match your needs
-- **Professional Output**: Clean, well-formatted documentation with images and descriptions
+## 🚀 Quick Start (Docker)
 
-## 🚀 Quick Start
+The fastest way to spin up Scrib is using Docker Compose.
 
 ### Prerequisites
 
-- Python 3.8 or higher
-- FFmpeg (for video processing)
-- Google Cloud account with Gemini Vision API access
+- [Docker & Docker Compose](https://docs.docker.com/engine/install/)
+- An API key for your Vision LLM (e.g., Groq API key or Ollama endpoint)
 
-### Installation
+### 1. Launch Scrib
 
-1. Clone the repository:
+Set up your `.env` variables or let the UI handle it. Start the application:
+
+```bash
+docker compose up --build
+```
+
+Access the unified React + FastAPI application in your browser:
+👉 **[http://localhost:8501](http://localhost:8501)**
+
+---
+
+## 🛠️ Local Development Setup
+
+If you prefer to run the components independently on your host machine:
+
+### Backend (FastAPI)
+
+1. **Virtual Environment**:
    ```bash
-   git clone https://github.com/CactusQuill/AI-DocGen.git
-   cd AI-DocGen
+   python -m venv .venv
+   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
    ```
 
-2. Create and activate a virtual environment:
-   ```bash
-   python -m venv venv
-   # Windows
-   .\venv\Scripts\activate
-   # Linux/Mac
-   source venv/bin/activate
-   ```
-
-3. Install dependencies:
+2. **Install Python Deps**:
    ```bash
    pip install -r requirements.txt
    ```
 
-4. Install FFmpeg:
-   - Windows: Download from [FFmpeg website](https://ffmpeg.org/download.html) and add to PATH
-   - Linux: `sudo apt-get install ffmpeg`
-   - Mac: `brew install ffmpeg`
+3. **Required Utilities**:
+   Ensure `ffmpeg` is installed and available in your system path (e.g. `brew install ffmpeg` on macOS).
 
-5. Set up environment variables:
-   - Create a `.env` file in the project root
-   - Add your Gemini API key:
-     ```
-     GEMINI_API_KEY=your_api_key_here
-     MODEL_NAME=gemini-vision-1.5
-     ```
-
-### Usage
-
-1. Start the application:
+4. **Run FastAPI**:
    ```bash
-   streamlit run app.py
+   python server.py
+   ```
+   The backend will start on **`http://localhost:8502`**.
+
+### Frontend (React + Vite)
+
+1. **Navigate & Install**:
+   ```bash
+   cd frontend
+   npm install
    ```
 
-2. In the web interface:
-   - Click "Start Recording" to begin capturing your screen
-   - Perform the process you want to document
-   - Click "Stop Recording" when finished
-   - Adjust step detection settings if needed
-   - Generate documentation in your preferred format
-
-## 🛠️ Configuration
-
-### Step Detection Settings
-
-- **Similarity Threshold** (0.0-1.0): Controls how different two frames need to be to be considered separate steps
-- **Minimum Time Between Steps** (seconds): Minimum time that must pass between detected steps
-
-### Output Formats
-
-1. **PDF**
-   - Professional layout with table of contents
-   - Embedded images and formatted text
-   - Page numbers and headers
-
-2. **HTML**
-   - Responsive design
-   - Interactive table of contents
-   - Print-friendly styling
-
-3. **Markdown**
-   - GitHub-compatible format
-   - Easy to version control
-   - Convertible to other formats
-
-## 🤝 Contributing
-
-We welcome contributions! Please follow these steps:
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
-### Development Setup
-
-1. Install development dependencies:
+2. **Run Vite Dev Server**:
    ```bash
-   pip install -r requirements-dev.txt
+   npm run dev
    ```
+   The development server will launch on **`http://localhost:8501`** and automatically proxy requests `/api/*` and `/output/*` to the FastAPI backend.
 
-2. Run tests:
-   ```bash
-   pytest
-   ```
+---
 
-3. Check code style:
-   ```bash
-   flake8
-   black .
-   ```
-4. Create file ~/.streamlit/config.toml for long time recording and upload biger viedo file.
+## ⚙️ Configuration
 
-content of file ~/.streamlit/config.toml:
-```
-[server]
-# Set the maximum size of an uploaded file (in megabytes)
-maxUploadSize = 1000  # Set the upload limit to 100MB (default is 200MB)
+Scrib uses a floating settings panel right in the UI sidebar to adjust detection sensitivity:
 
-# Increase the maximum allowed memory usage (in megabytes)
-# Default limit is typically 1GB (1024MB)
-# Example of setting 2GB:
+- **Frame Similarity Threshold (0.5 - 1.0)**: Controls how different two frames must be to trigger a new step. Lower numbers ignore minor UI changes (resulting in fewer steps); higher numbers capture subtle actions.
+- **Min Interval (seconds)**: Minimum elapsed video time required between steps to ignore rapid, duplicate actions.
+- **LLM Settings**: Switch between local Ollama instances or fast cloud hosts (like Groq) with customized vision endpoints.
 
-headless = true
-```
+---
+
 ## 📝 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## 🙏 Acknowledgments
-
-- Google Gemini Vision API for AI-powered image analysis
-- Streamlit for the amazing web interface framework
-- FFmpeg for video processing capabilities
-- All our contributors and users
-
-## 📚 Documentation
-
-For detailed documentation, visit our [Wiki](https://github.com/CactusQuill/AI-DocGen/wiki).
-
-## 🐛 Troubleshooting
-
-### Common Issues
-
-1. **Video Playback Issues**
-   - Ensure FFmpeg is properly installed
-   - Check video codec compatibility
-   - Try converting the video manually using FFmpeg
-
-2. **Step Detection Problems**
-   - Adjust similarity threshold
-   - Increase minimum time between steps
-   - Check if screen changes are significant enough
-
-3. **API Issues**
-   - Verify API key is correct
-   - Check API quota and limits
-   - Ensure internet connectivity
-
-### Getting Help
-
-- Open an [Issue](https://github.com/CactusQuill/AI-DocGen/issues)
-- Check existing [Discussions](https://github.com/CactusQuill/AI-DocGen/discussions)
-- Read our [FAQ](https://github.com/CactusQuill/AI-DocGen/wiki/FAQ)
-
-## 🔄 Updates
-
-- [X] Video file upload
-- [X] Long time video recording
-
-Stay updated with new releases:
-- Watch this repository
-- Follow our [Release Notes](https://github.com/CactusQuill/AI-DocGen/releases)
-
-## 📊 Project Status
-
-AI-DocGen is under active development. We're working on:
-- [ ] Multi-monitor support
-- [ ] Custom documentation templates
-- [ ] Cloud storage integration
-- [ ] Batch processing
-- [ ] API endpoint for programmatic access
-
-## 💡 Feature Requests
-
-Have an idea? We'd love to hear it!
-1. Check existing [Feature Requests](https://github.com/CactusQuill/AI-DocGen/labels/enhancement)
-2. Open a new [Discussion](https://github.com/CactusQuill/AI-DocGen/discussions/new)
