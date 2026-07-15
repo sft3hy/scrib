@@ -1,4 +1,4 @@
-# Scrib 🍌 — The Banana-Powered Process Documentation Tool
+# Scrib 🍌 — The AI-Powered Process Documentation Tool
 
 ![Scrib Logo](images/logo.png)
 
