@@ -1,0 +1,246 @@
+@import url('https://fonts.googleapis.com/css2?family=Fredoka:wght@300;400;500;600;700&family=Quicksand:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+:root {
+  font-family: 'Quicksand', system-ui, -apple-system, sans-serif;
+  line-height: 1.5;
+  font-weight: 500;
+
+  color: #f1f5f9;
+  background-color: #0b0d06;
+
+  /* Peely's Fortnite Yellow & Jungle Vibes */
+  --bg-main: #0c0e07; /* Dark Forest Floor */
+  --bg-sidebar: #13170c; /* Jungle Canopy */
+  --bg-card: rgba(25, 31, 16, 0.75); /* Translucent Leaf Green */
+  --border-glow: rgba(254, 226, 47, 0.35); /* Glowing Ripe Yellow */
+  --border-normal: rgba(254, 226, 47, 0.08);
+  --color-coral: #fee22f; /* Peely Yellow */
+  --color-coral-hover: #ffea5c; /* Soft Ripe Yellow */
+  --color-cyan: #86efac; /* Minty Leaf Green */
+  --color-purple: #eab308; /* Dark Honey Yellow */
+  --color-success: #4ade80; /* Ripe Avocado Green */
+  --color-text-muted: #94a3b8;
+  
+  --font-display: 'Fredoka', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  margin: 0;
+  display: block;
+  min-width: 100vw;
+  min-height: 100vh;
+  overflow-x: hidden;
+  background: radial-gradient(circle at 50% 50%, #1c2211 0%, #070804 100%);
+  background-attachment: fixed;
+}
+
+/* Custom Scrollbars - Banana Yellow */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.3);
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(254, 226, 47, 0.2);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-coral);
+  box-shadow: 0 0 8px var(--color-coral);
+}
+
+/* Glassmorphism Card Style - Jungle Theme */
+.glass-panel {
+  background: var(--bg-card);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border-normal);
+  border-radius: 20px;
+  box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.5);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.glass-panel:hover {
+  border-color: rgba(254, 226, 47, 0.2);
+  box-shadow: 0 12px 40px 0 rgba(254, 226, 47, 0.05);
+}
+
+/* Pulse animation for Peely Yellow recording indicator */
+@keyframes banana-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(254, 226, 47, 0.5);
+    transform: scale(1);
+  }
+  70% {
+    box-shadow: 0 0 0 12px rgba(254, 226, 47, 0);
+    transform: scale(1.02);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(254, 226, 47, 0);
+    transform: scale(1);
+  }
+}
+
+.recording-pulse {
+  animation: banana-pulse 2s infinite cubic-bezier(0.4, 0, 0.6, 1);
+}
+
+/* Markdown styling inside Previewer */
+.markdown-body {
+  color: #cbd5e1;
+  font-family: 'Quicksand', sans-serif;
+  line-height: 1.8;
+  font-size: 1.05rem;
+}
+
+.markdown-body h1 {
+  font-family: var(--font-display);
+  font-size: 2.4rem;
+  font-weight: 700;
+  margin-bottom: 1.8rem;
+  color: #fff;
+  border-bottom: 3px solid var(--color-coral);
+  padding-bottom: 0.6rem;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+.markdown-body h2 {
+  font-family: var(--font-display);
+  font-size: 1.8rem;
+  font-weight: 600;
+  margin-top: 2.2rem;
+  margin-bottom: 1.2rem;
+  color: #f8fafc;
+}
+
+.markdown-body h3 {
+  font-family: var(--font-display);
+  font-size: 1.4rem;
+  font-weight: 600;
+  margin-top: 1.8rem;
+  margin-bottom: 0.8rem;
+  color: #fff;
+}
+
+.markdown-body p {
+  margin-bottom: 1.4rem;
+  color: #cbd5e1;
+}
+
+.markdown-body blockquote {
+  border-left: 5px solid var(--color-coral);
+  padding: 0.6rem 1.2rem;
+  margin: 1.8rem 0;
+  background: rgba(254, 226, 47, 0.04);
+  border-radius: 0 12px 12px 0;
+}
+
+.markdown-body ul, .markdown-body ol {
+  margin-bottom: 1.4rem;
+  padding-left: 1.8rem;
+  color: #cbd5e1;
+}
+
+.markdown-body li {
+  margin-bottom: 0.5rem;
+}
+
+.markdown-body code {
+  font-family: var(--font-mono);
+  background: rgba(254, 226, 47, 0.08);
+  padding: 0.2rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.9em;
+  color: var(--color-coral);
+  border: 1px solid rgba(254, 226, 47, 0.15);
+}
+
+.markdown-body pre {
+  background: #090b05;
+  border: 1px solid var(--border-normal);
+  border-radius: 12px;
+  padding: 1.2rem;
+  overflow-x: auto;
+  margin-bottom: 1.4rem;
+}
+
+.markdown-body pre code {
+  background: transparent;
+  padding: 0;
+  border: none;
+  color: inherit;
+  font-size: 0.9em;
+}
+
+.markdown-body img {
+  max-width: 100%;
+  border-radius: 16px;
+  border: 2px solid var(--border-normal);
+  margin: 1.8rem 0;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+  display: block;
+}
+
+.markdown-body strong {
+  color: #fff;
+  font-weight: 700;
+}
+
+/* Custom Peely Styled select, input, slider */
+.custom-select, .custom-input {
+  background: #0e1108;
+  border: 1px solid var(--border-normal);
+  border-radius: 10px;
+  color: #fff;
+  padding: 0.6rem 0.9rem;
+  font-family: inherit;
+  font-size: 0.9rem;
+  outline: none;
+  width: 100%;
+  transition: all 0.2s;
+}
+
+.custom-select:focus, .custom-input:focus {
+  border-color: var(--color-coral);
+  box-shadow: 0 0 0 3px rgba(254, 226, 47, 0.2);
+}
+
+.custom-slider {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: #0e1108;
+  outline: none;
+  margin: 12px 0;
+}
+
+.custom-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--color-coral);
+  cursor: pointer;
+  box-shadow: 0 0 10px var(--color-coral);
+  transition: transform 0.15s;
+}
+
+.custom-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.35);
+}

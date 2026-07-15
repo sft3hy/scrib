@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ai-docgen.fullname" . }}
+  labels:
+    {{- include "ai-docgen.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "ai-docgen.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "ai-docgen.selectorLabels" . | nindent 8 }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "ai-docgen.serviceAccountName" . }}
+      containers:
+        - name: {{ .Chart.Name }}
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.service.portWeb }}
+              protocol: TCP
+          env:
+            - name: LLM_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "ai-docgen.fullname" . }}-secrets
+                  key: llm-api-key
+                  optional: true
+            - name: LLM_API_BASE
+              value: {{ .Values.config.llmApiBase | quote }}
+            - name: MODEL_NAME
+              value: {{ .Values.config.modelName | quote }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}

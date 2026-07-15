@@ -1,0 +1,51 @@
+replicaCount: 1
+
+image:
+  repository: harbor.i2cv.io/cosmichorizon/ai-docgen
+  pullPolicy: Always
+  tag: ""
+
+imagePullSecrets:
+  - name: s-hxl2n
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  name: ""
+
+service:
+  type: ClusterIP
+  portWeb: 8501
+
+resources:
+  requests:
+    cpu: "2"
+    memory: "4Gi"
+  limits:
+    cpu: "4"
+    memory: "8Gi"
+
+ingress:
+  enabled: true
+  className: "cosmichorizon-nginx"
+  annotations:
+    argocd.argoproj.io/tracking-id: ai-docgen:networking.k8s.io/Ingress:cosmichorizon/ai-docgen
+    cert-manager.io/cluster-issuer: letsencrypt
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      rewrite ^(/ai-docgen)$ $1/ permanent;
+    external-dns.alpha.kubernetes.io/target: test-cosmichorizon-worker-68a3110f01feebd0.elb.us-gov-west-1.amazonaws.com
+
+  hosts:
+    - host: test-cosmichorizon-worker-68a3110f01feebd0.elb.us-gov-west-1.amazonaws.com
+      paths:
+        - path: /ai-docgen(/|$)(.*)
+          pathType: ImplementationSpecific
+          backendPort: 8501
+  tls: []
+
+config:
+  llmApiKey: ""
+  llmApiBase: "http://localhost:11434/v1"
+  modelName: "gemma4:latest"
