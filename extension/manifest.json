@@ -1,0 +1,28 @@
+{
+  "manifest_version": 3,
+  "name": "Scrib Walkthrough Recorder",
+  "version": "1.0.0",
+  "description": "Records browser walkthrough actions and screenshots for Scrib.",
+  "permissions": [
+    "activeTab",
+    "tabs",
+    "scripting",
+    "storage"
+  ],
+  "host_permissions": [
+    "<all_urls>",
+    "http://localhost:3001/*",
+    "http://localhost:8502/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content_script.js"],
+      "run_at": "document_start",
+      "all_frames": false
+    }
+  ]
+}

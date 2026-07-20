@@ -2,7 +2,8 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import {
   Camera, UploadCloud, RefreshCw, FileText, Clipboard, Download,
   Settings, CheckCircle, AlertCircle, Play, Square, History,
-  Settings2, Eye, Cpu, HelpCircle, HardDrive, ChevronLeft, ChevronRight, Menu
+  Settings2, Eye, Cpu, HelpCircle, HardDrive, ChevronLeft, ChevronRight, Menu,
+  ArrowUp, ArrowDown, Trash2, ExternalLink, Save, Check, Plus, AlertTriangle
 } from 'lucide-react'
 import { marked } from 'marked'
 import peelyImg from './assets/peely.png'
@@ -67,6 +68,22 @@ const BananaIcon = () => (
   <img src={peelyImg} alt="Peely" style={{ width: '48px', height: '48px', objectFit: 'contain' }} />
 )
 
+const compileMarkdown = (guide) => {
+  if (!guide) return "";
+  let md = `# ${guide.title}\n\n${guide.description || ""}\n\n`;
+  md += `## Prerequisites\n- None\n\n## Steps\n`;
+  
+  const sorted = [...guide.steps].sort((a, b) => a.order_index - b.order_index);
+  sorted.forEach((step, idx) => {
+    md += `\n### Step ${idx + 1}\n${step.caption}\n\n`;
+    if (step.screenshot_url) {
+      md += `![Step ${idx + 1}](${step.screenshot_url})\n\n`;
+    }
+    md += `---\n`;
+  });
+  return md;
+};
+
 function App() {
   // Resizable and Collapsible Sidebar State
   const [sidebarWidth, setSidebarWidth] = useState(() => {
@@ -123,6 +140,19 @@ function App() {
   const [showSettings, setShowSettings] = useState(false)
   const [saveStatus, setSaveStatus] = useState('')
 
+  // Confluence and Custom Toast alert states
+  const [confluenceEmail, setConfluenceEmail] = useState('')
+  const [confluenceApiToken, setConfluenceApiToken] = useState('')
+  const [toast, setToast] = useState({ show: false, message: '', type: 'success' })
+  const [isExportingConfluence, setIsExportingConfluence] = useState(false)
+
+  const showToast = (message, type = 'success') => {
+    setToast({ show: true, message, type })
+    setTimeout(() => {
+      setToast(prev => ({ ...prev, show: false }))
+    }, 4000)
+  }
+
   // Video state
   const [videoFile, setVideoFile] = useState(null)
   const [videoPath, setVideoPath] = useState('')
@@ -154,11 +184,302 @@ function App() {
   // App history
   const [history, setHistory] = useState([])
 
+  // Onboarding & Extension states
+  const [onboardingCompleted, setOnboardingCompleted] = useState(true)
+  const [showOnboardingModal, setShowOnboardingModal] = useState(false)
+  const [extensionInstalled, setExtensionInstalled] = useState(false)
+  const [showUrlModal, setShowUrlModal] = useState(false)
+  const [targetUrl, setTargetUrl] = useState('')
+  const [dbGuides, setDbGuides] = useState([])
+  const [activeGuide, setActiveGuide] = useState(null)
+  const [editorSaveStatus, setEditorSaveStatus] = useState('All changes saved')
+  const [isEditingTitle, setIsEditingTitle] = useState(false)
+  const [isEditingDesc, setIsEditingDesc] = useState(false)
+  const [editingStepId, setEditingStepId] = useState(null)
+
+  const saveTimeoutRef = useRef(null)
+  const stepSaveTimeoutsRef = useRef({})
+
   // Load Settings and History on Mount
   useEffect(() => {
     fetchSettings()
     loadHistory()
+    fetchOnboardingStatus()
+    checkExtension()
+    loadGuidesFromDb()
+
+    // Listen to query param guideId if present
+    const params = new URLSearchParams(window.location.search);
+    const guideId = params.get("guideId");
+    if (guideId) {
+      loadGuide(guideId);
+    }
   }, [])
+
+  // Fetch Onboarding Status
+  const fetchOnboardingStatus = async () => {
+    try {
+      const res = await fetch('/api/users/me')
+      if (res.ok) {
+        const data = await res.json()
+        setOnboardingCompleted(!!data.onboarding_completed)
+        setShowOnboardingModal(!data.onboarding_completed)
+      }
+    } catch (err) {
+      console.error("Error fetching onboarding status:", err)
+    }
+  }
+
+  const handleSaveOnboarding = async (reason) => {
+    try {
+      const res = await fetch('/api/users/me', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ completed: true, reason: reason })
+      })
+      if (res.ok) {
+        setOnboardingCompleted(true)
+        setShowOnboardingModal(false)
+      }
+    } catch (err) {
+      console.error("Error saving onboarding reason:", err)
+    }
+  }
+
+  const checkExtension = () => {
+    // 1. Direct check
+    if (window.__SCRIBE_EXTENSION_INSTALLED__) {
+      setExtensionInstalled(true)
+      return
+    }
+
+    // 2. Event listener
+    const handleReady = () => {
+      console.log("Extension handshake received via custom event.");
+      window.__SCRIBE_EXTENSION_INSTALLED__ = true
+      setExtensionInstalled(true)
+    }
+    window.addEventListener("ScribeExtensionReady", handleReady)
+
+    // 3. Ping the extension immediately
+    window.dispatchEvent(new CustomEvent("ScribExtensionPing"))
+
+    // 4. Periodic pinging fallback
+    let checks = 0
+    const interval = setInterval(() => {
+      checks++
+      window.dispatchEvent(new CustomEvent("ScribExtensionPing"))
+      if (window.__SCRIBE_EXTENSION_INSTALLED__) {
+        setExtensionInstalled(true)
+        clearInterval(interval)
+      }
+      if (checks >= 10) {
+        clearInterval(interval)
+      }
+    }, 300)
+
+    return () => {
+      window.removeEventListener("ScribeExtensionReady", handleReady)
+      clearInterval(interval)
+    }
+  }
+
+  const loadGuidesFromDb = async () => {
+    try {
+      const res = await fetch('/api/guides')
+      if (res.ok) {
+        const data = await res.json()
+        setDbGuides(data)
+      }
+    } catch (err) {
+      console.error("Error loading guides:", err)
+    }
+  }
+
+  const loadGuide = async (guideId) => {
+    try {
+      const res = await fetch(`/api/guides/${guideId}`)
+      if (res.ok) {
+        const data = await res.json()
+        setActiveGuide(data)
+        // Transition to editor
+        setProgressState('db-editor')
+        setError('')
+      } else {
+        setError("Failed to load guide from database.")
+      }
+    } catch (err) {
+      setError("Error loading guide: " + err.message)
+    }
+  }
+
+  const handleStartExtensionRecording = () => {
+    if (!targetUrl) return
+    let formattedUrl = targetUrl
+    if (!/^https?:\/\//i.test(formattedUrl)) {
+      formattedUrl = 'http://' + formattedUrl
+    }
+    
+    // Post message to extension content script
+    window.postMessage({ type: "SCRIBE_START_RECORDING", url: formattedUrl }, "*")
+    setShowUrlModal(false)
+    setTargetUrl('')
+  }
+
+  const handleGuideUpdate = (updates) => {
+    if (!activeGuide) return
+    
+    // Update local state instantly
+    const updatedGuide = { ...activeGuide, ...updates }
+    setActiveGuide(updatedGuide)
+    setEditorSaveStatus('Saving...')
+
+    // Debounce backend save
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current)
+    }
+
+    saveTimeoutRef.current = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/guides/${activeGuide.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: updatedGuide.title,
+            description: updatedGuide.description || ""
+          })
+        })
+        if (res.ok) {
+          setEditorSaveStatus('All changes saved')
+          loadGuidesFromDb() // refresh sidebar
+        } else {
+          setEditorSaveStatus('Error saving title')
+        }
+      } catch (err) {
+        setEditorSaveStatus('Error saving')
+      }
+    }, 1000)
+  }
+
+  const handleStepCaptionChange = (stepId, newCaption) => {
+    if (!activeGuide) return
+
+    // Update local state instantly
+    const step = activeGuide.steps.find(s => s.id === stepId)
+    if (!step) return
+
+    const updatedSteps = activeGuide.steps.map(s => 
+      s.id === stepId ? { ...s, caption: newCaption } : s
+    )
+    setActiveGuide({ ...activeGuide, steps: updatedSteps })
+    setEditorSaveStatus('Saving...')
+
+    // Debounce step save
+    if (stepSaveTimeoutsRef.current[stepId]) {
+      clearTimeout(stepSaveTimeoutsRef.current[stepId])
+    }
+
+    stepSaveTimeoutsRef.current[stepId] = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/guides/${activeGuide.id}/steps/${stepId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            caption: newCaption,
+            order_index: step.order_index
+          })
+        })
+        if (res.ok) {
+          setEditorSaveStatus('All changes saved')
+        } else {
+          setEditorSaveStatus('Error saving caption')
+        }
+      } catch (err) {
+        setEditorSaveStatus('Error saving')
+      }
+    }, 1000)
+  }
+
+  const handleMoveStep = async (stepId, direction) => {
+    if (!activeGuide) return
+    const steps = [...activeGuide.steps]
+    const idx = steps.findIndex(s => s.id === stepId)
+    if (idx === -1) return
+    
+    const targetIdx = direction === 'up' ? idx - 1 : idx + 1
+    if (targetIdx < 0 || targetIdx >= steps.length) return
+
+    setEditorSaveStatus('Saving layout...')
+
+    // Swap steps in state
+    const temp = steps[idx]
+    steps[idx] = steps[targetIdx]
+    steps[targetIdx] = temp
+
+    // Reassign order indexes
+    const updatedSteps = steps.map((s, i) => ({ ...s, order_index: i }))
+    setActiveGuide({ ...activeGuide, steps: updatedSteps })
+
+    // Save changes to backend
+    try {
+      // Save both updated steps
+      await Promise.all([
+        fetch(`/api/guides/${activeGuide.id}/steps/${updatedSteps[idx].id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ caption: updatedSteps[idx].caption, order_index: idx })
+        }),
+        fetch(`/api/guides/${activeGuide.id}/steps/${updatedSteps[targetIdx].id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ caption: updatedSteps[targetIdx].caption, order_index: targetIdx })
+        })
+      ])
+      setEditorSaveStatus('All changes saved')
+    } catch (err) {
+      setEditorSaveStatus('Error saving layout')
+    }
+  }
+
+  const handleDeleteStep = async (stepId) => {
+    if (!activeGuide) return
+    if (!confirm("Are you sure you want to delete this step?")) return
+
+    setEditorSaveStatus('Deleting step...')
+    try {
+      const res = await fetch(`/api/guides/${activeGuide.id}/steps/${stepId}`, {
+        method: 'DELETE'
+      })
+      if (res.ok) {
+        // Reload guide to get fresh steps & order_indexes
+        loadGuide(activeGuide.id)
+        setEditorSaveStatus('All changes saved')
+      } else {
+        setEditorSaveStatus('Error deleting step')
+      }
+    } catch (err) {
+      setEditorSaveStatus('Error deleting')
+    }
+  }
+
+  const handleDeleteGuide = async (guideId, e) => {
+    if (e) e.stopPropagation()
+    if (!confirm("Are you sure you want to delete this guide?")) return
+
+    try {
+      const res = await fetch(`/api/guides/${guideId}`, {
+        method: 'DELETE'
+      })
+      if (res.ok) {
+        loadGuidesFromDb()
+        if (activeGuide && activeGuide.id === guideId) {
+          resetAll()
+        }
+      }
+    } catch (err) {
+      console.error("Error deleting guide:", err)
+    }
+  }
 
   const fetchSettings = async () => {
     try {
@@ -170,6 +491,8 @@ function App() {
         setModelName(data.model_name || 'gemma4:latest')
         setSimilarityThreshold(data.similarity_threshold || 0.85)
         setMinTime(data.min_time_between_steps || 1.0)
+        setConfluenceEmail(data.confluence_email || '')
+        setConfluenceApiToken(data.confluence_api_token || '')
       }
     } catch (err) {
       console.error("Error fetching settings:", err)
@@ -188,7 +511,9 @@ function App() {
           llm_api_base: llmApiBase,
           model_name: modelName,
           similarity_threshold: similarityThreshold,
-          min_time_between_steps: minTime
+          min_time_between_steps: minTime,
+          confluence_email: confluenceEmail,
+          confluence_api_token: confluenceApiToken
         })
       })
       if (res.ok) {
@@ -431,6 +756,7 @@ function App() {
               setMarkdownResult(data.markdown)
               setScreenshots(data.screenshots)
               setDocUrl(data.doc_url)
+              setVideoUrl('')
 
               // Save to localStorage history
               saveToHistory({
@@ -438,7 +764,7 @@ function App() {
                 markdown: data.markdown,
                 screenshots: data.screenshots,
                 docUrl: data.doc_url,
-                videoUrl: videoUrl,
+                videoUrl: '',
                 timestamp: new Date().toLocaleString()
               })
               setIsProcessing(false)
@@ -467,7 +793,32 @@ function App() {
 
   const handleCopy = () => {
     navigator.clipboard.writeText(markdownResult)
-    alert("Markdown copied to clipboard!")
+    showToast("Markdown copied to clipboard!")
+  }
+
+  const handleExportConfluence = async () => {
+    if (!activeGuide) return
+    
+    setIsExportingConfluence(true)
+    showToast("Publishing guide to Confluence...")
+    
+    try {
+      const res = await fetch(`/api/guides/${activeGuide.id}/export-confluence`, {
+        method: 'POST'
+      })
+      
+      const data = await res.json()
+      if (res.ok && data.status === 'success') {
+        showToast("Successfully exported to Confluence!")
+        window.open(data.url, '_blank')
+      } else {
+        showToast(data.detail || "Failed to export to Confluence.", "error")
+      }
+    } catch (err) {
+      showToast("Error connecting to server: " + err.message, "error")
+    } finally {
+      setIsExportingConfluence(false)
+    }
   }
 
   const loadFromHistory = (item) => {
@@ -607,9 +958,9 @@ function App() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', flexGrow: 1 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#fff', fontSize: '0.9rem', fontWeight: 600 }}>
                 <History size={16} />
-                <span>Recent Documents</span>
+                <span>Saved Documents</span>
               </div>
-              {history.length === 0 ? (
+              {dbGuides.length === 0 ? (
                 <div style={{
                   fontSize: '0.8rem',
                   color: 'var(--color-text-muted)',
@@ -623,9 +974,9 @@ function App() {
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {history.map((item, idx) => (
+                  {dbGuides.map((item) => (
                     <div
-                      key={idx}
+                      key={item.id}
                       style={{
                         background: 'rgba(255,255,255,0.03)',
                         border: '1px solid var(--border-normal)',
@@ -640,7 +991,7 @@ function App() {
                       onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border-normal)' }}
                     >
                       <button
-                        onClick={() => loadFromHistory(item)}
+                        onClick={() => loadGuide(item.id)}
                         style={{
                           background: 'transparent',
                           border: 'none',
@@ -656,12 +1007,12 @@ function App() {
                           {item.title}
                         </div>
                         <div style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)', marginTop: '4px' }}>
-                          {item.timestamp}
+                          {item.updated_at}
                         </div>
                       </button>
                       <button
-                        onClick={() => deleteFromHistory(idx)}
-                        title="Delete"
+                        onClick={(e) => handleDeleteGuide(item.id, e)}
+                        title="Delete Guide"
                         style={{
                           background: 'transparent',
                           border: 'none',
@@ -758,6 +1109,7 @@ function App() {
                         onChange={(e) => setMinTime(parseFloat(e.target.value))}
                       />
                     </div>
+
                     <button
                       type="submit"
                       style={{
@@ -825,7 +1177,7 @@ function App() {
             justifyContent: 'center',
             flexGrow: 1,
             gap: '32px',
-            maxWidth: '800px',
+            maxWidth: '1000px',
             margin: '0 auto',
             width: '100%'
           }}>
@@ -852,13 +1204,105 @@ function App() {
               </div>
             )}
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', width: '100%' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '24px', width: '100%' }}>
+
+              {/* Direct Walkthrough (Extension) */}
+              <div
+                className="glass-panel"
+                style={{
+                  padding: '40px 24px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '20px',
+                  textAlign: 'center',
+                  position: 'relative',
+                  overflow: 'hidden',
+                  border: extensionInstalled ? '1px solid var(--border-glow)' : '1px dashed var(--border-normal)'
+                }}
+              >
+                <div style={{
+                  borderRadius: '50%',
+                  background: extensionInstalled ? 'rgba(134, 239, 172, 0.1)' : 'rgba(255, 255, 255, 0.03)',
+                  border: extensionInstalled ? '2px solid var(--color-cyan)' : '1px solid var(--border-normal)',
+                  padding: '24px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  <Cpu size={36} color={extensionInstalled ? 'var(--color-cyan)' : '#fff'} />
+                </div>
+                <div>
+                  <h3 style={{ fontSize: '1.25rem', color: '#fff', fontWeight: 700, marginBottom: '6px' }}>Browser Walkthrough</h3>
+                  <p style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)' }}>
+                    Record clicks & inputs directly on websites. Requires Chrome extension.
+                  </p>
+                </div>
+
+                {!extensionInstalled ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%' }}>
+                    <div style={{
+                      background: 'rgba(234, 179, 8, 0.08)',
+                      border: '1px solid rgba(234, 179, 8, 0.3)',
+                      borderRadius: '8px',
+                      padding: '10px',
+                      fontSize: '0.75rem',
+                      color: 'var(--color-text-muted)',
+                      textAlign: 'left',
+                      lineHeight: '1.4'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '4px', color: '#fee22f', fontWeight: 'bold', marginBottom: '4px' }}>
+                        <AlertTriangle size={14} />
+                        <span>Setup Unpacked Extension:</span>
+                      </div>
+                      1. Open <code>chrome://extensions</code><br/>
+                      2. Enable <strong>Developer Mode</strong><br/>
+                      3. Click <strong>Load unpacked</strong> & choose <code>extension</code> folder in this project root.
+                    </div>
+                    <button
+                      disabled
+                      style={{
+                        background: 'rgba(255, 255, 255, 0.02)',
+                        color: 'var(--color-text-muted)',
+                        border: '1px solid var(--border-normal)',
+                        borderRadius: '8px',
+                        padding: '12px 24px',
+                        fontWeight: 700,
+                        fontSize: '0.95rem',
+                        cursor: 'not-allowed',
+                        width: '100%'
+                      }}
+                    >
+                      Extension Required
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setShowUrlModal(true)}
+                    style={{
+                      background: 'linear-gradient(135deg, #fee22f 0%, #eab308 100%)',
+                      color: '#000',
+                      border: 'none',
+                      borderRadius: '8px',
+                      padding: '12px 24px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      fontSize: '0.95rem',
+                      width: '100%',
+                      justifyContent: 'center',
+                      boxShadow: '0 4px 12px rgba(254, 226, 47, 0.25)'
+                    }}
+                  >
+                    <span>Start Walkthrough</span>
+                  </button>
+                )}
+              </div>
 
               {/* Record Card */}
               <div
                 className="glass-panel"
                 style={{
-                  padding: '40px 32px',
+                  padding: '40px 24px',
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
@@ -937,7 +1381,7 @@ function App() {
               <div
                 className="glass-panel"
                 style={{
-                  padding: '40px 32px',
+                  padding: '40px 24px',
                   display: 'flex',
                   flexDirection: 'column',
                   alignItems: 'center',
@@ -1286,7 +1730,581 @@ function App() {
           </div>
         )}
 
+        {/* Step 3 (Alternative): Database Guide Editor View */}
+        {progressState === 'db-editor' && activeGuide && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '24px', width: '100%', flexGrow: 1 }}>
+            
+            {/* Top Editor Toolbar */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <h2 style={{ fontSize: '1.5rem', fontWeight: 800, color: '#fff' }}>Interactive Guide Editor</h2>
+                  <span style={{
+                    fontSize: '0.75rem',
+                    padding: '4px 8px',
+                    borderRadius: '6px',
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    color: 'var(--color-text-muted)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '4px'
+                  }}>
+                    {editorSaveStatus === 'Saving...' ? (
+                      <RefreshCw size={12} className="recording-pulse" style={{ animation: 'spin 1.5s linear infinite' }} />
+                    ) : editorSaveStatus === 'All changes saved' ? (
+                      <Check size={12} color="var(--color-success)" />
+                    ) : null}
+                    <span>{editorSaveStatus}</span>
+                  </span>
+                </div>
+                <p style={{ fontSize: '0.85rem', color: 'var(--color-text-muted)' }}>Click text directly to edit. Changes auto-save in real-time.</p>
+              </div>
+
+              <div style={{ display: 'flex', gap: '12px' }}>
+                <button
+                  onClick={resetAll}
+                  style={{
+                    background: 'transparent',
+                    border: '1px solid var(--border-normal)',
+                    borderRadius: '8px',
+                    padding: '8px 16px',
+                    color: '#fff',
+                    fontSize: '0.9rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}
+                >
+                  <RefreshCw size={14} />
+                  <span>Start New</span>
+                </button>
+                 <button
+                  onClick={() => {
+                    const md = compileMarkdown(activeGuide);
+                    navigator.clipboard.writeText(md);
+                    showToast("Markdown guide copied to clipboard!");
+                  }}
+                  style={{
+                    background: 'transparent',
+                    border: '1px solid var(--border-normal)',
+                    borderRadius: '8px',
+                    padding: '8px 16px',
+                    color: '#fff',
+                    fontSize: '0.9rem',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.borderColor = 'var(--color-coral)'}
+                  onMouseLeave={(e) => e.currentTarget.style.borderColor = 'var(--border-normal)'}
+                >
+                  <Clipboard size={14} />
+                  <span>Copy Markdown</span>
+                </button>
+                <button
+                  onClick={handleExportConfluence}
+                  disabled={isExportingConfluence}
+                  style={{
+                    background: 'var(--color-coral)',
+                    border: 'none',
+                    borderRadius: '8px',
+                    padding: '8px 16px',
+                    color: '#000',
+                    fontSize: '0.9rem',
+                    fontWeight: 700,
+                    cursor: isExportingConfluence ? 'not-allowed' : 'pointer',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px',
+                    transition: 'all 0.2s',
+                    opacity: isExportingConfluence ? 0.7 : 1
+                  }}
+                  onMouseEnter={(e) => {
+                    if (!isExportingConfluence) e.currentTarget.style.background = 'var(--color-coral-hover)';
+                  }}
+                  onMouseLeave={(e) => {
+                    if (!isExportingConfluence) e.currentTarget.style.background = 'var(--color-coral)';
+                  }}
+                >
+                  {isExportingConfluence ? (
+                    <RefreshCw size={14} style={{ animation: 'spin 1.5s linear infinite' }} />
+                  ) : (
+                    <ExternalLink size={14} />
+                  )}
+                  <span>{isExportingConfluence ? 'Exporting...' : 'Export to Confluence'}</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Editor Guide Body */}
+            <div className="glass-panel" style={{ padding: '32px', display: 'flex', flexDirection: 'column', gap: '32px' }}>
+              
+              {/* Title Section */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderBottom: '1px solid var(--border-normal)', paddingBottom: '20px' }}>
+                {isEditingTitle ? (
+                  <input
+                    type="text"
+                    value={activeGuide.title}
+                    onChange={(e) => handleGuideUpdate({ title: e.target.value })}
+                    onBlur={() => setIsEditingTitle(false)}
+                    autoFocus
+                    style={{
+                      fontSize: '2.2rem',
+                      fontWeight: 800,
+                      color: '#fff',
+                      background: 'rgba(0,0,0,0.3)',
+                      border: '1px solid var(--color-coral)',
+                      borderRadius: '8px',
+                      padding: '8px 16px',
+                      width: '100%',
+                      fontFamily: 'var(--font-display)'
+                    }}
+                  />
+                ) : (
+                  <h1 
+                    onClick={() => setIsEditingTitle(true)}
+                    title="Click to edit title"
+                    style={{ 
+                      fontSize: '2.2rem', 
+                      fontWeight: 800, 
+                      color: '#fff', 
+                      cursor: 'pointer', 
+                      fontFamily: 'var(--font-display)',
+                      margin: 0,
+                      borderBottom: '3px solid var(--color-coral)',
+                      paddingBottom: '8px'
+                    }}
+                  >
+                    {activeGuide.title || "Untitled Guide"}
+                  </h1>
+                )}
+
+                {isEditingDesc ? (
+                  <textarea
+                    value={activeGuide.description || ""}
+                    onChange={(e) => handleGuideUpdate({ description: e.target.value })}
+                    onBlur={() => setIsEditingDesc(false)}
+                    autoFocus
+                    placeholder="Provide a brief description of what this walkthrough accomplishes..."
+                    style={{
+                      fontSize: '1rem',
+                      color: 'var(--color-text-muted)',
+                      background: 'rgba(0,0,0,0.3)',
+                      border: '1px solid var(--color-coral)',
+                      borderRadius: '8px',
+                      padding: '8px 16px',
+                      width: '100%',
+                      minHeight: '80px',
+                      fontFamily: 'inherit',
+                      resize: 'vertical'
+                    }}
+                  />
+                ) : (
+                  <p 
+                    onClick={() => setIsEditingDesc(true)}
+                    title="Click to edit description"
+                    style={{ 
+                      color: 'var(--color-text-muted)', 
+                      fontSize: '1rem', 
+                      cursor: 'pointer', 
+                      margin: 0,
+                      minHeight: '24px' 
+                    }}
+                  >
+                    {activeGuide.description || "Click to add a description explaining this workflow guide..."}
+                  </p>
+                )}
+              </div>
+
+              {/* Steps Area */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '40px' }}>
+                {activeGuide.steps.length === 0 ? (
+                  <div style={{
+                    textAlign: 'center',
+                    padding: '40px',
+                    border: '1px dashed var(--border-normal)',
+                    borderRadius: '12px',
+                    color: 'var(--color-text-muted)'
+                  }}>
+                    No steps recorded for this guide.
+                  </div>
+                ) : (
+                  [...activeGuide.steps]
+                    .sort((a, b) => a.order_index - b.order_index)
+                    .map((step, idx) => (
+                      <div 
+                        key={step.id} 
+                        style={{
+                          display: 'flex',
+                          gap: '24px',
+                          border: '1px solid var(--border-normal)',
+                          borderRadius: '16px',
+                          padding: '24px',
+                          background: 'rgba(0,0,0,0.15)',
+                          position: 'relative'
+                        }}
+                      >
+                        {/* Step numbering & position controls */}
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+                          <div style={{
+                            width: '36px',
+                            height: '36px',
+                            borderRadius: '50%',
+                            background: 'var(--color-coral)',
+                            color: '#000',
+                            fontWeight: 800,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: '1.1rem'
+                          }}>
+                            {idx + 1}
+                          </div>
+                          
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '12px' }}>
+                            <button
+                              disabled={idx === 0}
+                              onClick={() => handleMoveStep(step.id, 'up')}
+                              style={{
+                                background: 'transparent',
+                                border: '1px solid var(--border-normal)',
+                                color: idx === 0 ? 'rgba(255,255,255,0.1)' : '#fff',
+                                padding: '4px',
+                                borderRadius: '6px',
+                                cursor: idx === 0 ? 'not-allowed' : 'pointer'
+                              }}
+                            >
+                              <ArrowUp size={14} />
+                            </button>
+                            <button
+                              disabled={idx === activeGuide.steps.length - 1}
+                              onClick={() => handleMoveStep(step.id, 'down')}
+                              style={{
+                                background: 'transparent',
+                                border: '1px solid var(--border-normal)',
+                                color: idx === activeGuide.steps.length - 1 ? 'rgba(255,255,255,0.1)' : '#fff',
+                                padding: '4px',
+                                borderRadius: '6px',
+                                cursor: idx === activeGuide.steps.length - 1 ? 'not-allowed' : 'pointer'
+                              }}
+                            >
+                              <ArrowDown size={14} />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Step content */}
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px', flexGrow: 1 }}>
+                          
+                          {/* Screenshot with Click Indicator overlay */}
+                          {step.screenshot_url && (
+                            <div style={{
+                              position: 'relative',
+                              display: 'inline-block',
+                              width: '100%',
+                              maxWidth: '640px',
+                              borderRadius: '12px',
+                              overflow: 'hidden',
+                              border: '1px solid var(--border-normal)',
+                              boxShadow: '0 4px 12px rgba(0,0,0,0.5)'
+                            }}>
+                              <img 
+                                src={step.screenshot_url} 
+                                alt={`Step ${idx + 1}`} 
+                                style={{ width: '100%', display: 'block', height: 'auto' }}
+                              />
+                              {/* Overlay Circle */}
+                              {!step.is_annotated && step.click_x_percent > 0 && step.click_y_percent > 0 && (
+                                <div
+                                  style={{
+                                    position: 'absolute',
+                                    left: `${step.click_x_percent}%`,
+                                    top: `${step.click_y_percent}%`,
+                                    width: '36px',
+                                    height: '36px',
+                                    border: '4px solid #FF8C00',
+                                    borderRadius: '50%',
+                                    background: 'rgba(255, 140, 0, 0.25)',
+                                    transform: 'translate(-50%, -50%)',
+                                    pointerEvents: 'none',
+                                    boxShadow: '0 0 10px rgba(0,0,0,0.6)'
+                                  }}
+                                />
+                              )}
+                            </div>
+                          )}
+
+                          {/* Editable Step Caption */}
+                          <div style={{ width: '100%' }}>
+                            {editingStepId === step.id ? (
+                              <textarea
+                                value={step.caption}
+                                onChange={(e) => handleStepCaptionChange(step.id, e.target.value)}
+                                onBlur={() => setEditingStepId(null)}
+                                autoFocus
+                                style={{
+                                  width: '100%',
+                                  padding: '12px 16px',
+                                  fontSize: '1rem',
+                                  color: '#fff',
+                                  background: 'rgba(0,0,0,0.3)',
+                                  border: '1px solid var(--color-coral)',
+                                  borderRadius: '8px',
+                                  minHeight: '60px',
+                                  resize: 'vertical',
+                                  fontFamily: 'inherit'
+                                }}
+                              />
+                            ) : (
+                              <div
+                                onClick={() => setEditingStepId(step.id)}
+                                title="Click to edit caption"
+                                style={{
+                                  fontSize: '1rem',
+                                  color: '#cbd5e1',
+                                  cursor: 'pointer',
+                                  padding: '10px 12px',
+                                  border: '1px solid transparent',
+                                  borderRadius: '8px',
+                                  transition: 'all 0.15s'
+                                }}
+                                onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.03)'; e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)' }}
+                                onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; e.currentTarget.style.borderColor = 'transparent' }}
+                              >
+                                {step.caption || "Click to write a caption for this step..."}
+                              </div>
+                            )}
+                          </div>
+
+                        </div>
+
+                        {/* Delete step button (top-right of card) */}
+                        <button
+                          onClick={() => handleDeleteStep(step.id)}
+                          title="Delete Step"
+                          style={{
+                            position: 'absolute',
+                            top: '20px',
+                            right: '20px',
+                            background: 'transparent',
+                            border: 'none',
+                            color: 'var(--color-text-muted)',
+                            cursor: 'pointer',
+                            padding: '6px',
+                            borderRadius: '6px',
+                            transition: 'all 0.15s'
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.color = '#ef4444'; e.currentTarget.style.background = 'rgba(239, 68, 68, 0.1)' }}
+                          onMouseLeave={(e) => { e.currentTarget.style.color = 'var(--color-text-muted)'; e.currentTarget.style.background = 'transparent' }}
+                        >
+                          <Trash2 size={16} />
+                        </button>
+
+                      </div>
+                    ))
+                )}
+              </div>
+
+            </div>
+          </div>
+        )}
+
       </main>
+
+      {/* URL entry Modal for extension walkthrough */}
+      {showUrlModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.8)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 9999,
+          backdropFilter: 'blur(6px)'
+        }}>
+          <div className="glass-panel" style={{
+            width: '100%',
+            maxWidth: '480px',
+            padding: '32px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '20px',
+            border: '1px solid var(--border-glow)'
+          }}>
+            <div>
+              <h3 style={{ fontSize: '1.5rem', fontFamily: 'var(--font-display)', color: '#fff', marginBottom: '6px' }}>
+                Start Walkthrough Recording 🖥️
+              </h3>
+              <p style={{ color: 'var(--color-text-muted)', fontSize: '0.85rem' }}>
+                Enter the URL of the website you want to record. The extension will open it in a new tab and start capturing.
+              </p>
+            </div>
+
+            <input
+              type="url"
+              placeholder="https://example.com"
+              value={targetUrl}
+              onChange={(e) => setTargetUrl(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '12px 16px',
+                borderRadius: '8px',
+                border: '1px solid var(--border-normal)',
+                background: 'rgba(0, 0, 0, 0.2)',
+                color: '#fff',
+                fontSize: '0.95rem'
+              }}
+            />
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+              <button
+                onClick={() => setShowUrlModal(false)}
+                style={{
+                  padding: '10px 20px',
+                  borderRadius: '8px',
+                  border: '1px solid var(--border-normal)',
+                  background: 'transparent',
+                  color: '#fff',
+                  cursor: 'pointer'
+                }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleStartExtensionRecording}
+                style={{
+                  padding: '10px 20px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: 'var(--color-coral)',
+                  color: '#000',
+                  fontWeight: 700,
+                  cursor: 'pointer'
+                }}
+              >
+                Go &amp; Record
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Onboarding survey modal */}
+      {showOnboardingModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.85)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 10000,
+          backdropFilter: 'blur(8px)'
+        }}>
+          <div className="glass-panel" style={{
+            width: '100%',
+            maxWidth: '520px',
+            padding: '40px',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '24px',
+            position: 'relative',
+            border: '1px solid var(--border-glow)'
+          }}>
+            <div style={{ textAlign: 'center' }}>
+              <h2 style={{ fontSize: '2rem', fontFamily: 'var(--font-display)', color: '#fff', marginBottom: '8px' }}>
+                What brings you to Scrib? 🍌
+              </h2>
+              <p style={{ color: 'var(--color-text-muted)', fontSize: '0.95rem' }}>
+                Help us customize your workflow experience.
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {[
+                { label: "Training & Onboarding", reason: "training" },
+                { label: "Creating SOPs (Standard Operating Procedures)", reason: "sops" },
+                { label: "Customer Support & Documentation", reason: "support" },
+                { label: "Personal or Side Projects", reason: "personal" }
+              ].map((opt) => (
+                <button
+                  key={opt.reason}
+                  onClick={() => handleSaveOnboarding(opt.reason)}
+                  style={{
+                    padding: '16px',
+                    borderRadius: '12px',
+                    border: '1px solid var(--border-normal)',
+                    background: 'rgba(255, 255, 255, 0.02)',
+                    color: '#fff',
+                    fontSize: '0.95rem',
+                    fontWeight: 600,
+                    textAlign: 'left',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = 'rgba(254, 226, 47, 0.08)';
+                    e.currentTarget.style.borderColor = 'var(--color-coral)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = 'rgba(255, 255, 255, 0.02)';
+                    e.currentTarget.style.borderColor = 'var(--border-normal)';
+                  }}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Nice Alert Toast */}
+      {toast.show && (
+        <div 
+          className="custom-toast"
+          style={{
+            position: 'fixed',
+            bottom: '24px',
+            right: '24px',
+            zIndex: 11000,
+            background: 'rgba(19, 23, 12, 0.85)',
+            backdropFilter: 'blur(16px)',
+            WebkitBackdropFilter: 'blur(16px)',
+            border: `1px solid ${toast.type === 'error' ? '#ef4444' : 'var(--color-coral)'}`,
+            boxShadow: `0 8px 32px 0 rgba(0, 0, 0, 0.5), 0 0 15px ${toast.type === 'error' ? 'rgba(239, 68, 68, 0.2)' : 'rgba(254, 226, 47, 0.15)'}`,
+            borderRadius: '12px',
+            padding: '16px 24px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+            color: '#fff',
+            fontFamily: 'var(--font-display)',
+            fontSize: '0.95rem',
+            fontWeight: 600,
+            pointerEvents: 'auto'
+          }}
+        >
+          {toast.type === 'error' ? (
+            <AlertCircle style={{ color: '#ef4444', width: '20px', height: '20px' }} />
+          ) : (
+            <CheckCircle style={{ color: 'var(--color-success)', width: '20px', height: '20px' }} />
+          )}
+          <span>{toast.message}</span>
+        </div>
+      )}
+
     </div>
   )
 }

@@ -16,7 +16,7 @@ serviceAccount:
 
 service:
   type: ClusterIP
-  portWeb: 8501
+  portWeb: 3001
 
 resources:
   requests:
@@ -42,7 +42,7 @@ ingress:
       paths:
         - path: /ai-docgen(/|$)(.*)
           pathType: ImplementationSpecific
-          backendPort: 8501
+          backendPort: 3001
   tls: []
 
 config:

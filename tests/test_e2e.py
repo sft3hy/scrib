@@ -23,7 +23,7 @@ import requests
 from pathlib import Path
 
 BACKEND = "http://localhost:8502"
-FRONTEND = "http://localhost:8501"
+FRONTEND = "http://localhost:3001"
 
 # ANSI colours for terminal output
 GREEN = "\033[92m"

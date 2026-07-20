@@ -35,7 +35,7 @@ docker compose up --build
 ```
 
 Access the unified React + FastAPI application in your browser:
-👉 **[http://localhost:8501](http://localhost:8501)**
+👉 **[http://localhost:3001](http://localhost:3001)**
 
 ---
 
@@ -77,7 +77,7 @@ If you prefer to run the components independently on your host machine:
    ```bash
    npm run dev
    ```
-   The development server will launch on **`http://localhost:8501`** and automatically proxy requests `/api/*` and `/output/*` to the FastAPI backend.
+   The development server will launch on **`http://localhost:3001`** and automatically proxy requests `/api/*` and `/output/*` to the FastAPI backend.
 
 ---
 

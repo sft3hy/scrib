@@ -31,8 +31,8 @@ COPY . .
 # Copy built frontend assets from stage 1 into our static dist folder
 COPY --from=build-stage /frontend/dist /app/frontend/dist
 
-# Expose port 8501 for the unified FastAPI + React UI
-EXPOSE 8501
+# Expose port 3001 for the unified FastAPI + React UI
+EXPOSE 3001
 
 # Start the unified FastAPI server
-CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8501"]
+CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "3001"]

@@ -3,7 +3,7 @@ services:
     build: .
     container_name: ai-docgen-web
     ports:
-      - "8501:8501"
+      - "3001:3001"
       - "8502:8502"
     environment:
       # Default to Groq Llama 4 Scout Vision API

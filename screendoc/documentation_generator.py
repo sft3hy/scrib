@@ -682,24 +682,50 @@ Generated on: {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
                     try:
                         prev_image_data = Image.open(BytesIO(img_file.read()))
                     except Exception as e:
-                        print(f"Error opening image: {e}")
-
-            # Create prompt for action
+                        print(f"Error opening image: {e}")            # Create prompt for action
             if prev_image_data:
                 prompt = """Analyze these two consecutive screenshots from a process recording.
 Identify the user action that caused the transition from the previous screen (start state) to the current screen (end state).
 What button did they click, what did they type, or what menu did they open?
-Respond with a single, clear, action-oriented sentence describing this action (e.g. 'Clicked the **Submit** button' or 'Typed "my_password" into the password field and pressed **Enter**').
 
-CRITICAL: Do NOT mention or reference 'Scrib', 'Scribe', or 'Peely' tools/applications in any way. These are only the recording tools. Document only the actions taken inside the target application.
-Only return the sentence, nothing else."""
+Respond with a JSON object containing:
+1. "action": A single, clear, action-oriented sentence describing this action (e.g. 'Clicked the **Submit** button' or 'Typed "my_password" into the password field and pressed **Enter**').
+2. "interaction_type": Either "click", "type", or "none".
+3. "coordinates": The normalized coordinates of the action in percentages (0 to 100) relative to the image width and height:
+   - For "click", return the center point: [x_percent, y_percent].
+   - For "type", return the bounding box: [x_percent, y_percent, width_percent, height_percent] of the input field.
+   - For "none", return [0, 0].
+
+Example JSON output:
+{
+  "action": "Clicked the **Submit** button",
+  "interaction_type": "click",
+  "coordinates": [52.4, 76.1]
+}
+
+CRITICAL: Do NOT mention or reference 'Scrib', 'Scribe', or 'Peely' tools/applications in any way. Document only the actions taken inside the target application.
+Only return the raw JSON block, nothing else."""
             else:
                 prompt = """Analyze this screenshot from a process recording.
 Identify what action the user is performing or has just completed on this screen.
-Respond with a single, clear, action-oriented sentence describing the state/action (e.g. 'Opened the dashboard page' or 'Navigated to the settings configuration tab').
 
-CRITICAL: Do NOT mention or reference 'Scrib', 'Scribe', or 'Peely' tools/applications in any way. These are only the recording tools. Document only the actions taken inside the target application.
-Only return the sentence, nothing else."""
+Respond with a JSON object containing:
+1. "action": A single, clear, action-oriented sentence describing the state/action (e.g. 'Opened the dashboard page' or 'Navigated to the settings configuration tab').
+2. "interaction_type": Either "click", "type", or "none".
+3. "coordinates": The normalized coordinates of the action in percentages (0 to 100) relative to the image width and height:
+   - For "click", return the center point: [x_percent, y_percent].
+   - For "type", return the bounding box: [x_percent, y_percent, width_percent, height_percent] of the input field.
+   - For "none", return [0, 0].
+
+Example JSON output:
+{
+  "action": "Opened the dashboard page",
+  "interaction_type": "none",
+  "coordinates": [0, 0]
+}
+
+CRITICAL: Do NOT mention or reference 'Scrib', 'Scribe', or 'Peely' tools/applications in any way. Document only the actions taken inside the target application.
+Only return the raw JSON block, nothing else."""
 
             messages = [{"role": "user", "content": [{"type": "text", "text": prompt}]}]
 
@@ -723,11 +749,32 @@ Only return the sentence, nothing else."""
 
             description = self._call_llm(messages)
 
-            # Clean up the output to be a clean single sentence
-            description = description.replace("\n", " ").strip()
+            # Parse JSON response
+            import json
+            action_data = {"action": "Action on screen", "interaction_type": "none", "coordinates": [0, 0, 0, 0]}
+            try:
+                clean_desc = description.strip()
+                if clean_desc.startswith("```json"):
+                    clean_desc = clean_desc[7:]
+                if clean_desc.startswith("```"):
+                    clean_desc = clean_desc[3:]
+                if clean_desc.endswith("```"):
+                    clean_desc = clean_desc[:-3]
+                clean_desc = clean_desc.strip()
+                
+                parsed = json.loads(clean_desc)
+                if isinstance(parsed, dict):
+                    action_data["action"] = parsed.get("action", "Action on screen")
+                    action_data["interaction_type"] = parsed.get("interaction_type", "none")
+                    action_data["coordinates"] = parsed.get("coordinates", [0, 0, 0, 0])
+            except Exception:
+                # Fallback to treat the raw string response as the action description
+                action_data["action"] = description.replace("\n", " ").strip()
+                action_data["interaction_type"] = "none"
+                action_data["coordinates"] = [0, 0, 0, 0]
 
             time.sleep(self.request_delay)  # Rate limiting
-            return description
+            return action_data
 
         except Exception as e:
             print(f"Error extracting step action: {str(e)}")
