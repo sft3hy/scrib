@@ -661,7 +661,7 @@ def get_settings():
     return {
         "llm_api_key": os.getenv("LLM_API_KEY", ""),
         "llm_api_base": os.getenv("LLM_API_BASE", "http://localhost:11434"),
-        "model_name": os.getenv("MODEL_NAME", "meta-llama/llama-4-scout-17b-16e-instruct"),
+        "model_name": os.getenv("MODEL_NAME", "qwen/qwen3.6-27b"),
         "similarity_threshold": float(os.getenv("SIMILARITY_THRESHOLD", "0.85")),
         "min_time_between_steps": float(os.getenv("MIN_TIME_BETWEEN_STEPS", "0.5")),
         "confluence_email": os.getenv("CONFLUENCE_EMAIL", ""),

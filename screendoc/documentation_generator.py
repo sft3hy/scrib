@@ -92,7 +92,7 @@ class DocumentationGenerator:
         if base_url.endswith("/"):
             base_url = base_url[:-1]
         self.ollama_base = base_url
-        self.model_name = os.getenv("MODEL_NAME", "meta-llama/llama-4-scout-17b-16e-instruct")
+        self.model_name = os.getenv("MODEL_NAME", "qwen/qwen3.6-27b")
 
         # Rate limiting parameters
         self.request_delay = 1.0  # Delay between requests in seconds
@@ -119,7 +119,7 @@ class DocumentationGenerator:
         """Call the configured LLM API (Ollama or Groq)."""
         delay = 1.0
 
-        if self.model_name == "meta-llama/llama-4-scout-17b-16e-instruct":
+        if "groq.com" in self.ollama_base.lower():
             from groq import Groq
             import groq
             api_key = os.getenv("GROQ_API_KEY") or os.getenv("LLM_API_KEY")

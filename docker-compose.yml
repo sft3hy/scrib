@@ -8,7 +8,7 @@ services:
     environment:
       # Default to Groq Llama 4 Scout Vision API
       - LLM_API_BASE=https://api.groq.com/openai/v1
-      - MODEL_NAME=meta-llama/llama-4-scout-17b-16e-instruct
+      - MODEL_NAME=qwen/qwen3.6-27b
       - GROQ_API_KEY
     volumes:
       - .:/app

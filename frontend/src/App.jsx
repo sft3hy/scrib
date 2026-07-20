@@ -134,7 +134,7 @@ function App() {
   // Config state
   const [llmApiKey, setLlmApiKey] = useState('')
   const [llmApiBase, setLlmApiBase] = useState('http://localhost:11434/v1')
-  const [modelName, setModelName] = useState('meta-llama/llama-4-scout-17b-16e-instruct')
+  const [modelName, setModelName] = useState('qwen/qwen3.6-27b')
   const [similarityThreshold, setSimilarityThreshold] = useState(0.85)
   const [minTime, setMinTime] = useState(0.5)
   const [showSettings, setShowSettings] = useState(false)
@@ -1073,8 +1073,8 @@ function App() {
                         <option value="qwen3.5:2b">qwen3.5:2b</option>
                         <option value="x/flux2-klein:9b">x/flux2-klein:9b</option>
                         <option value="nomic-embed-text:latest">nomic-embed-text:latest</option>
-                        <option value="meta-llama/llama-4-scout-17b-16e-instruct">meta-llama/llama-4-scout-17b-16e-instruct (Groq)</option>
-                        {modelName && !['gemma4:latest', 'gemma4:26b', 'qwen3.5:2b', 'x/flux2-klein:9b', 'nomic-embed-text:latest', 'meta-llama/llama-4-scout-17b-16e-instruct'].includes(modelName) && (
+                        <option value="qwen/qwen3.6-27b">qwen/qwen3.6-27b (Groq - Vision)</option>
+                        {modelName && !['gemma4:latest', 'gemma4:26b', 'qwen3.5:2b', 'x/flux2-klein:9b', 'nomic-embed-text:latest', 'meta-llama/llama-4-scout-17b-16e-instruct', 'qwen/qwen3.6-27b'].includes(modelName) && (
                           <option value={modelName}>{modelName} (Current)</option>
                         )}
                       </select>
